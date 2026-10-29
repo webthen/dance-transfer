@@ -1,4 +1,9 @@
-const { MAX_FILE_SIZE_BYTES, OVERSIZE_ERROR_MESSAGE, QUICK_SUFFIXES } = require('../../config');
+const {
+  MAX_FILE_SIZE_BYTES,
+  OVERSIZE_ERROR_MESSAGE,
+  QUICK_SUFFIXES,
+  DEFAULT_PIN,
+} = require('../../config');
 const {
   sanitizeDanceName,
   appendDanceSuffix,
@@ -353,7 +358,7 @@ Page({
       filePath: videoFile.tempFilePath,
       fileSize: videoFile.size,
       danceName: cleanDanceName,
-      pin: '',
+      pin: DEFAULT_PIN || 'DancerAt654321',
       onProgress: ({ loaded, total, percent, partNumber, totalParts }) => {
         this.setData({
           uploadPercent: percent,

@@ -5,6 +5,7 @@
  */
 module.exports = {
   API_BASE_URL: 'https://dance.lage.us.ci',
+  DEFAULT_PIN: 'DancerAt654321',
   MAX_FILE_SIZE_BYTES: 500 * 1024 * 1024, // 500MB
   OVERSIZE_ERROR_MESSAGE: '视频太大啦（超过500M），请换个清晰度低一点的',
   QUICK_SUFFIXES: ['背面', '正面', '分解教学', '慢速'],

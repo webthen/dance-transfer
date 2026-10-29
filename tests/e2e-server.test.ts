@@ -4,11 +4,11 @@ import { createServer } from 'vite';
 describe('Vite Dev Server E2E Workflow', () => {
   it('completes full upload, deduplication, listing, attachment download, and cleanup flow', async () => {
     const server = await createServer({
-      server: { port: 5198, strictPort: true },
+      server: { host: '127.0.0.1', port: 5198, strictPort: true },
       logLevel: 'silent',
     });
     await server.listen();
-    const base = 'http://localhost:5198';
+    const base = 'http://127.0.0.1:5198';
 
     try {
       // 1. SPA 页面路由均可正常访问

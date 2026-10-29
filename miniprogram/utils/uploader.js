@@ -1,4 +1,4 @@
-const { API_BASE_URL } = require('../config');
+const { API_BASE_URL, DEFAULT_PIN } = require('../config');
 const { extractFileExtFromPath, guessContentTypeByExt } = require('./dance');
 
 function normalizeNetworkError(err) {
@@ -118,6 +118,7 @@ function sleep(ms) {
  * 支持 <=8MB 单次直传与 >8MB（最高 500MB）自动分片续传 + 单片 3 次自动重试 + 实时平滑进度回调
  */
 function uploadVideoToCloud({ filePath, fileSize, danceName, pin, onProgress }) {
+  const effectivePin = String(pin || DEFAULT_PIN || 'DancerAt654321').trim();
   let cancelled = false;
   let activeTask = null;
   let smoothTimer = null;
@@ -165,7 +166,7 @@ function uploadVideoToCloud({ filePath, fileSize, danceName, pin, onProgress }) 
       method: 'POST',
       header: {
         'content-type': 'application/json',
-        'x-access-pin': pin,
+        'x-access-pin': effectivePin,
       },
       data: {
         objectKey: info.objectKey,
@@ -202,7 +203,7 @@ function uploadVideoToCloud({ filePath, fileSize, danceName, pin, onProgress }) 
       timeout: 20000,
       header: {
         'content-type': 'application/json',
-        'x-access-pin': pin,
+        'x-access-pin': effectivePin,
       },
       data: {
         danceName,
@@ -312,7 +313,7 @@ function uploadVideoToCloud({ filePath, fileSize, danceName, pin, onProgress }) 
               timeout: 180000,
               header: {
                 'content-type': 'application/octet-stream',
-                'x-access-pin': pin,
+                'x-access-pin': effectivePin,
               },
               data: chunkBuffer,
             });
@@ -384,7 +385,7 @@ function uploadVideoToCloud({ filePath, fileSize, danceName, pin, onProgress }) 
           timeout: 30000,
           header: {
             'content-type': 'application/json',
-            'x-access-pin': pin,
+            'x-access-pin': effectivePin,
           },
           data: {
             objectKey,
