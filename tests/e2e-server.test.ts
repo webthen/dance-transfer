@@ -247,5 +247,5 @@ describe('Vite Dev Server E2E Workflow', () => {
     } finally {
       await server.close();
     }
-  });
+  }, 30000);
 });

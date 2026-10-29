@@ -4,8 +4,7 @@ const {
   appendDanceSuffix,
   formatFileSizeMB,
 } = require('../../utils/dance');
-const { getStoredPin, setStoredPin, clearStoredPin } = require('../../utils/storage');
-const { verifyAccessPin, uploadVideoToCloud } = require('../../utils/uploader');
+const { uploadVideoToCloud } = require('../../utils/uploader');
 
 let activeUploadAbort = null;
 let privacyResolvers = new Set();
@@ -28,12 +27,6 @@ function setScreenKeepAwake(keepAwake) {
 
 Page({
   data: {
-    // 口令门禁状态
-    isUnlocked: false,
-    gatePinInput: '',
-    gatePinError: '',
-    verifyingGate: false,
-
     // 上传表单状态
     quickSuffixes: QUICK_SUFFIXES,
     danceNameInput: '',
@@ -70,29 +63,8 @@ Page({
 
   pendingRetryFile: null,
 
-  onLoad(options) {
-    // 1. 捕获分享卡片或菊花码携带的 ?pin= 参数自动免密解锁
-    let incomingPin = '';
-    if (options && typeof options.pin === 'string' && options.pin.trim()) {
-      incomingPin = decodeURIComponent(options.pin).trim();
-    } else if (options && typeof options.scene === 'string' && options.scene.trim()) {
-      const decodedScene = decodeURIComponent(options.scene);
-      const match = decodedScene.match(/(?:^|&)pin=([^&]+)/);
-      if (match && match[1]) {
-        incomingPin = match[1].trim();
-      }
-    }
-
-    if (incomingPin) {
-      setStoredPin(incomingPin);
-    }
-
-    const storedPin = getStoredPin();
-    this.setData({
-      isUnlocked: Boolean(storedPin),
-    });
-
-    // 2. 兼容微信隐私保护协议按需弹窗（保障真机 wx.chooseMedia 100% 可用且合规过审）
+  onLoad() {
+    // 兼容微信隐私保护协议按需弹窗（保障真机 wx.chooseMedia 100% 可用且合规过审）
     if (typeof wx.onNeedPrivacyAuthorization === 'function') {
       wx.onNeedPrivacyAuthorization((resolve) => {
         privacyResolvers.add(resolve);
@@ -124,82 +96,12 @@ Page({
     privacyResolvers.clear();
   },
 
-  // 支持微信右上角及底部按钮一键转发免密卡片
+  // 支持微信右上角及底部按钮一键转发
   onShareAppMessage() {
-    const pin = getStoredPin();
-    const path = pin
-      ? `/pages/index/index?pin=${encodeURIComponent(pin)}`
-      : '/pages/index/index';
     return {
       title: '广场舞视频传送站 · 填写名称一键直传云端',
-      path,
+      path: '/pages/index/index',
     };
-  },
-
-  // ================== 口令门禁逻辑 ==================
-
-  onGatePinInput(e) {
-    this.setData({
-      gatePinInput: e.detail.value || '',
-      gatePinError: '',
-    });
-  },
-
-  async handleUnlockGate() {
-    if (this.data.verifyingGate) return;
-    const pin = String(this.data.gatePinInput || '').trim();
-    if (!pin) {
-      safeVibrate('medium');
-      this.setData({ gatePinError: '请输入访问口令' });
-      return;
-    }
-
-    this.setData({
-      verifyingGate: true,
-      gatePinError: '',
-    });
-
-    const result = await verifyAccessPin(pin);
-    if (!result.valid) {
-      safeVibrate('heavy');
-      this.setData({
-        verifyingGate: false,
-        gatePinError: result.message || '访问口令不正确，请重新输入',
-      });
-      return;
-    }
-
-    setStoredPin(pin);
-    safeVibrate('light');
-    this.setData({
-      verifyingGate: false,
-      isUnlocked: true,
-      gatePinInput: '',
-      gatePinError: '',
-    });
-  },
-
-  handleLockLogout() {
-    wx.showModal({
-      title: '退出当前口令',
-      content: '退出后本机将清除已保存的访问口令，下次进入需重新输入口令。确认退出吗？',
-      confirmText: '确认退出',
-      confirmColor: '#E11D48',
-      cancelText: '取消',
-      success: (res) => {
-        if (res.confirm) {
-          clearStoredPin();
-          this.pendingRetryFile = null;
-          this.setData({
-            isUnlocked: false,
-            stage: 'idle',
-            danceNameInput: '',
-            sanitizedName: '',
-            hasPendingRetry: false,
-          });
-        }
-      },
-    });
   },
 
   // ================== 隐私保护弹窗逻辑 ==================
@@ -432,12 +334,6 @@ Page({
   },
 
   async startUploadProcess(videoFile, cleanDanceName) {
-    const pin = getStoredPin();
-    if (!pin) {
-      this.setData({ isUnlocked: false });
-      return;
-    }
-
     this.pendingRetryFile = videoFile;
     setScreenKeepAwake(true);
 
@@ -457,7 +353,7 @@ Page({
       filePath: videoFile.tempFilePath,
       fileSize: videoFile.size,
       danceName: cleanDanceName,
-      pin,
+      pin: '',
       onProgress: ({ loaded, total, percent, partNumber, totalParts }) => {
         this.setData({
           uploadPercent: percent,
@@ -489,16 +385,6 @@ Page({
         this.setData({
           stage: 'idle',
           uploadPercent: 0,
-        });
-        return;
-      }
-
-      if (err && err.isUnauthorized) {
-        clearStoredPin();
-        this.setData({
-          isUnlocked: false,
-          stage: 'idle',
-          gatePinError: '访问口令已变更或失效，请重新输入口令',
         });
         return;
       }

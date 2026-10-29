@@ -6,45 +6,8 @@
       <view class="header-subtitle">填写舞蹈名称，快速直传云端待下载</view>
     </view>
 
-    <!-- 门禁卡片：未保存访问口令时展示 -->
-    <view wx:if="{{!isUnlocked}}" class="card gate-card">
-      <view class="gate-icon-box">🔑</view>
-      <view class="gate-title">请输入访问口令</view>
-      <view class="gate-desc">本小程序受访问口令保护，请输入口令进入</view>
-
-      <view class="tip-box">
-        <view class="tip-title">💡 使用提示：</view>
-        <view class="tip-text">如从带有口令的分享卡片打开，系统将自动免密解锁并记住状态。</view>
-      </view>
-
-      <input
-        class="gate-input"
-        type="text"
-        value="{{gatePinInput}}"
-        placeholder="请输入访问口令"
-        placeholder-class="input-placeholder"
-        confirm-type="done"
-        bindinput="onGatePinInput"
-        bindconfirm="handleUnlockGate"
-      />
-
-      <view wx:if="{{gatePinError}}" class="error-inline">
-        ⚠️ {{gatePinError}}
-      </view>
-
-      <button
-        class="btn-primary"
-        disabled="{{verifyingGate}}"
-        bindtap="handleUnlockGate"
-      >
-        {{verifyingGate ? '验证中...' : '进入传送站'}}
-      </button>
-    </view>
-
-    <!-- 已授权主功能区 -->
-    <block wx:else>
-      <!-- 状态一：上传成功反馈页 -->
-      <view wx:if="{{stage === 'success'}}" class="card success-card">
+    <!-- 状态一：上传成功反馈页 -->
+    <view wx:if="{{stage === 'success'}}" class="card success-card">
         <view class="status-circle success-circle">🎉</view>
         <view class="success-title">
           ✅《{{succeededDanceTitle}}》上传成功！已存入云端待下载
@@ -174,18 +137,13 @@
           </view>
         </view>
 
-        <!-- 底部工具栏：快捷分享免密卡片 / 退出当前口令 -->
+        <!-- 底部工具栏：快捷转发小程序 -->
         <view class="footer-bar">
           <button class="footer-link-btn" open-type="share">
-            📤 转发免密入口
+            📤 转发小程序
           </button>
-          <text class="footer-dot">·</text>
-          <view class="footer-link-btn" bindtap="handleLockLogout">
-            🔒 退出当前口令
-          </view>
         </view>
       </block>
-    </block>
   </view>
 
   <!-- 大字提示弹窗（如超过 500M 提示 / 权限引导提示） -->
