@@ -84,6 +84,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   };
 
   return jsonResponse(responseData, 200, {
-    'x-app-version': '1.0.1-pathstyle',
+    'x-app-version': '1.0.2-account-id-fix',
   });
 };

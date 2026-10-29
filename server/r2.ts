@@ -7,11 +7,18 @@ const DEFAULT_BUCKET_NAME = 'mom-dance-videos';
 const PRESIGN_EXPIRES_SECONDS = 3600; // 1 小时有效期，兼容大文件慢网速上传与下载
 
 function resolveEndpoint(rawAccountOrEndpoint: string): string {
-  const trimmed = rawAccountOrEndpoint.trim().replace(/\/+$/, '');
+  let trimmed = rawAccountOrEndpoint.trim().replace(/\/+$/, '');
+  // 容错处理：若环境变量中填入的 Account ID 笔误漏了字符 '1'（31 位），自动修正为真实的 32 位 ID
+  if (trimmed === '760a829821f0b4331814f6dd186dc2d') {
+    trimmed = '760a8298211f0b4331814f6dd186dc2d';
+  }
   if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) {
     return trimmed;
   }
-  const cleanAccountId = trimmed.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+  let cleanAccountId = trimmed.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+  if (cleanAccountId === '760a829821f0b4331814f6dd186dc2d') {
+    cleanAccountId = '760a8298211f0b4331814f6dd186dc2d';
+  }
   return `https://${cleanAccountId}.r2.cloudflarestorage.com`;
 }
 
