@@ -1,0 +1,222 @@
+<view class="page-container">
+  <view class="content-wrap">
+    <!-- 顶部品牌标题区 -->
+    <view class="header">
+      <view class="header-title">💃 广场舞视频传送站</view>
+      <view class="header-subtitle">填写舞蹈名称，快速直传云端待下载</view>
+    </view>
+
+    <!-- 门禁卡片：未保存访问口令时展示 -->
+    <view wx:if="{{!isUnlocked}}" class="card gate-card">
+      <view class="gate-icon-box">🔑</view>
+      <view class="gate-title">请输入访问口令</view>
+      <view class="gate-desc">本小程序受访问口令保护，请输入口令进入</view>
+
+      <view class="tip-box">
+        <view class="tip-title">💡 使用提示：</view>
+        <view class="tip-text">如从带有口令的分享卡片打开，系统将自动免密解锁并记住状态。</view>
+      </view>
+
+      <input
+        class="gate-input"
+        type="text"
+        value="{{gatePinInput}}"
+        placeholder="请输入访问口令"
+        placeholder-class="input-placeholder"
+        confirm-type="done"
+        bindinput="onGatePinInput"
+        bindconfirm="handleUnlockGate"
+      />
+
+      <view wx:if="{{gatePinError}}" class="error-inline">
+        ⚠️ {{gatePinError}}
+      </view>
+
+      <button
+        class="btn-primary"
+        disabled="{{verifyingGate}}"
+        bindtap="handleUnlockGate"
+      >
+        {{verifyingGate ? '验证中...' : '进入传送站'}}
+      </button>
+    </view>
+
+    <!-- 已授权主功能区 -->
+    <block wx:else>
+      <!-- 状态一：上传成功反馈页 -->
+      <view wx:if="{{stage === 'success'}}" class="card success-card">
+        <view class="status-circle success-circle">🎉</view>
+        <view class="success-title">
+          ✅《{{succeededDanceTitle}}》上传成功！已存入云端待下载
+        </view>
+        <view wx:if="{{succeededFileName}}" class="saved-file-pill">
+          云端文件名：{{succeededFileName}}
+        </view>
+        <view class="status-desc">
+          视频已成功传输至云端中转站，现在可以安全退出，或继续上传下一个视频。
+        </view>
+        <button class="btn-success" bindtap="handleResetForNext">
+          继续上传下一个
+        </button>
+      </view>
+
+      <!-- 状态二：正在分片上传大号进度页 -->
+      <view wx:elif="{{stage === 'uploading'}}" class="card progress-card">
+        <view class="uploading-label">正在上传：《{{uploadingTitle}}》</view>
+        <view class="percent-number">{{uploadPercent}}%</view>
+
+        <view class="progress-track">
+          <view class="progress-bar" style="width: {{uploadPercent}}%;"></view>
+        </view>
+
+        <view class="progress-meta">
+          <text>已传 {{uploadedMBText}} / 共 {{totalMBText}}</text>
+          <text wx:if="{{totalParts > 1}}" class="part-badge">分片 {{partNumber}}/{{totalParts}}</text>
+        </view>
+
+        <view class="keep-open-notice">
+          正在上传中，已自动保持屏幕常亮，请勿关闭页面...
+        </view>
+
+        <button class="btn-outline" bindtap="handleCancelUploading">
+          取消本次上传
+        </button>
+      </view>
+
+      <!-- 状态三：上传中断一键重试页 -->
+      <view wx:elif="{{stage === 'error'}}" class="card error-card">
+        <view class="status-circle error-circle">📡</view>
+        <view class="error-title">上传没有完成</view>
+        <view class="error-detail">{{errorMessage}}</view>
+
+        <button
+          wx:if="{{hasPendingRetry}}"
+          class="btn-primary mb-gap"
+          bindtap="handleRetryUpload"
+        >
+          🔄 点这里重新上传
+        </button>
+
+        <button class="btn-outline" bindtap="handleBackToEdit">
+          返回修改名称或重选视频
+        </button>
+      </view>
+
+      <!-- 状态四：默认两步极简上传页 -->
+      <block wx:else>
+        <view class="card form-card">
+          <!-- 第一步 -->
+          <view class="step-header">
+            <text class="step-badge">第 1 步</text>
+            <text class="step-title">填写舞蹈名称（必填）</text>
+          </view>
+
+          <view class="input-wrapper {{shakeActive ? 'animate-shake' : ''}}">
+            <input
+              class="dance-input {{nameErrorActive ? 'dance-input-error' : ''}}"
+              type="text"
+              maxlength="100"
+              value="{{danceNameInput}}"
+              focus="{{focusNameInput}}"
+              placeholder="请输入舞蹈名称（如：苹果香）"
+              placeholder-class="input-placeholder"
+              confirm-type="done"
+              bindinput="onDanceNameInput"
+            />
+            <view
+              wx:if="{{danceNameInput}}"
+              class="clear-btn"
+              bindtap="handleClearName"
+            >
+              ✕
+            </view>
+          </view>
+
+          <view wx:if="{{nameErrorActive}}" class="name-error-box">
+            ⚠️ 请先在上方输入舞蹈名称，再选择视频
+          </view>
+
+          <view wx:elif="{{sanitizedName}}" class="preview-pill">
+            保存文件名：<text class="preview-bold">{{sanitizedName}}.mp4</text>
+          </view>
+
+          <!-- 快捷后缀标签 -->
+          <view class="suffix-section">
+            <view class="suffix-label">点下面标签可快速加到名称后面：</view>
+            <view class="suffix-grid">
+              <view
+                wx:for="{{quickSuffixes}}"
+                wx:key="*this"
+                class="suffix-chip"
+                data-suffix="{{item}}"
+                bindtap="handleAppendSuffix"
+              >
+                +{{item}}
+              </view>
+            </view>
+          </view>
+
+          <view class="divider"></view>
+
+          <!-- 第二步 -->
+          <view class="step-header">
+            <text class="step-badge">第 2 步</text>
+            <text class="step-title">选择相册视频并上传</text>
+          </view>
+
+          <button class="btn-primary btn-upload" bindtap="handleSelectAndUpload">
+            <text class="btn-icon">📹</text>
+            <text>选择视频并开始上传</text>
+          </button>
+
+          <view class="upload-hint">
+            自动从手机相册原画直传，不压缩画质（最大支持 500M）
+          </view>
+        </view>
+
+        <!-- 底部工具栏：快捷分享免密卡片 / 退出当前口令 -->
+        <view class="footer-bar">
+          <button class="footer-link-btn" open-type="share">
+            📤 转发免密入口
+          </button>
+          <text class="footer-dot">·</text>
+          <view class="footer-link-btn" bindtap="handleLockLogout">
+            🔒 退出当前口令
+          </view>
+        </view>
+      </block>
+    </block>
+  </view>
+
+  <!-- 大字提示弹窗（如超过 500M 提示） -->
+  <view wx:if="{{alertVisible}}" class="modal-mask">
+    <view class="modal-box">
+      <view class="modal-icon">🎬</view>
+      <view class="modal-title">{{alertTitle}}</view>
+      <view class="modal-msg">{{alertMessage}}</view>
+      <button class="btn-primary" bindtap="closeLargeAlert">我知道了</button>
+    </view>
+  </view>
+
+  <!-- 微信官方隐私保护指引合规授权弹窗 -->
+  <view wx:if="{{showPrivacyModal}}" class="modal-mask">
+    <view class="modal-box">
+      <view class="modal-icon">🛡️</view>
+      <view class="modal-title">隐私保护提示</view>
+      <view class="modal-msg">
+        使用相册视频上传功能前，请阅读并同意
+        <text class="privacy-link" bindtap="handleOpenPrivacyContract">{{privacyContractName}}</text>。
+        我们仅在您主动选取视频时读取所选文件用于传输归档。
+      </view>
+      <button
+        id="agree-privacy-btn"
+        class="btn-primary mb-gap"
+        open-type="agreePrivacyAuthorization"
+        bindagreeprivacyauthorization="handleAgreePrivacy"
+      >
+        同意并继续
+      </button>
+      <button class="btn-outline" bindtap="handleDisagreePrivacy">暂不同意</button>
+    </view>
+  </view>
+</view>

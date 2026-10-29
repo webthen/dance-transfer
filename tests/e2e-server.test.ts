@@ -123,6 +123,127 @@ describe('Vite Dev Server E2E Workflow', () => {
       expect(delRes.status).toBe(200);
       const delJson = (await delRes.json()) as { deletedCount: number };
       expect(delJson.deletedCount).toBe(2);
+
+      // 8. 微信小程序单分片 (<=8MB) 与多分片 (>8MB) 上传至同一管理后台闭环验证
+      const mpUnauth = await fetch(`${base}/api/mp/init`, {
+        method: 'POST',
+        body: JSON.stringify({ danceName: '早安隆回', fileSize: 100 }),
+      });
+      expect(mpUnauth.status).toBe(401);
+
+      // 8a. 小程序单分片模式 (mode = single)
+      const mpSingleInit = await fetch(`${base}/api/mp/init`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          danceName: ' 早安隆回:分解教学 ',
+          fileExt: '.mp4',
+          fileSize: 16,
+          contentType: 'video/mp4',
+        }),
+      });
+      expect(mpSingleInit.status).toBe(200);
+      const sSession = (await mpSingleInit.json()) as {
+        mode: string;
+        objectKey: string;
+        fileName: string;
+      };
+      expect(sSession.mode).toBe('single');
+      expect(sSession.fileName).toBe('早安隆回_分解教学.mp4');
+
+      const sPartRes = await fetch(
+        `${base}/api/mp/part?key=${encodeURIComponent(sSession.objectKey)}&mode=single&fileName=${encodeURIComponent(sSession.fileName)}&contentType=video%2Fmp4`,
+        {
+          method: 'PUT',
+          headers: { 'x-access-pin': 'mom666', 'Content-Type': 'application/octet-stream' },
+          body: 'mp-single-video!',
+        }
+      );
+      expect(sPartRes.status).toBe(200);
+
+      // 8b. 小程序多分片模式 (mode = multipart, >8MB 拆分为 8MB + 4KB 两片)
+      const part1Buf = Buffer.alloc(8 * 1024 * 1024, 0x61); // 8MB 'a'
+      const part2Buf = Buffer.alloc(4096, 0x62); // 4KB 'b'
+      const totalMultiSize = part1Buf.length + part2Buf.length;
+
+      const mpMultiInit = await fetch(`${base}/api/mp/init`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          danceName: '最炫民族风_正面',
+          fileExt: '.mp4',
+          fileSize: totalMultiSize,
+          contentType: 'video/mp4',
+        }),
+      });
+      expect(mpMultiInit.status).toBe(200);
+      const mSession = (await mpMultiInit.json()) as {
+        mode: string;
+        objectKey: string;
+        uploadId: string;
+        totalParts: number;
+        fileName: string;
+      };
+      expect(mSession.mode).toBe('multipart');
+      expect(mSession.totalParts).toBe(2);
+      expect(mSession.uploadId.length).toBeGreaterThan(0);
+
+      const mPart1Res = await fetch(
+        `${base}/api/mp/part?key=${encodeURIComponent(mSession.objectKey)}&mode=multipart&uploadId=${encodeURIComponent(mSession.uploadId)}&partNumber=1`,
+        {
+          method: 'PUT',
+          headers: { 'x-access-pin': 'mom666', 'Content-Type': 'application/octet-stream' },
+          body: part1Buf,
+        }
+      );
+      expect(mPart1Res.status).toBe(200);
+      const mPart1 = (await mPart1Res.json()) as { partNumber: number; etag: string };
+
+      const mPart2Res = await fetch(
+        `${base}/api/mp/part?key=${encodeURIComponent(mSession.objectKey)}&mode=multipart&uploadId=${encodeURIComponent(mSession.uploadId)}&partNumber=2`,
+        {
+          method: 'PUT',
+          headers: { 'x-access-pin': 'mom666', 'Content-Type': 'application/octet-stream' },
+          body: part2Buf,
+        }
+      );
+      expect(mPart2Res.status).toBe(200);
+      const mPart2 = (await mPart2Res.json()) as { partNumber: number; etag: string };
+
+      const mCompleteRes = await fetch(`${base}/api/mp/complete`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          objectKey: mSession.objectKey,
+          uploadId: mSession.uploadId,
+          parts: [mPart2, mPart1], // 故意乱序提交，验证服务端自动按 partNumber 排序合并
+        }),
+      });
+      expect(mCompleteRes.status).toBe(200);
+
+      // 8c. 管理端列表可同时查看到小程序上传的两个视频并完整下载校验字节一致性
+      const dlMultiInfoRes = await fetch(
+        `${base}/api/download-url?key=${encodeURIComponent(mSession.objectKey)}`,
+        { headers }
+      );
+      expect(dlMultiInfoRes.status).toBe(200);
+      const dlMultiInfo = (await dlMultiInfoRes.json()) as { downloadUrl: string; fileName: string };
+      expect(dlMultiInfo.fileName).toBe('最炫民族风_正面.mp4');
+
+      const dlMultiBin = Buffer.from(await (await fetch(dlMultiInfo.downloadUrl)).arrayBuffer());
+      expect(dlMultiBin.length).toBe(totalMultiSize);
+      expect(dlMultiBin[0]).toBe(0x61);
+      expect(dlMultiBin[8 * 1024 * 1024 - 1]).toBe(0x61);
+      expect(dlMultiBin[8 * 1024 * 1024]).toBe(0x62);
+      expect(dlMultiBin[totalMultiSize - 1]).toBe(0x62);
+
+      // 8d. 清理小程序测试生成的视频对象
+      const mpCleanupRes = await fetch(`${base}/api/videos`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ keys: [sSession.objectKey, mSession.objectKey] }),
+      });
+      expect(mpCleanupRes.status).toBe(200);
     } finally {
       await server.close();
     }

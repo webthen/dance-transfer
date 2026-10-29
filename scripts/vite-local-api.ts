@@ -4,12 +4,21 @@ import crypto from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { onRequest as authMiddleware } from '../functions/api/_middleware';
 import { onRequestPost as uploadUrlPost } from '../functions/api/upload-url';
+import { onRequestPost as mpInitPost } from '../functions/api/mp/init';
+import { onRequestPut as mpPartPut } from '../functions/api/mp/part';
+import { onRequestPost as mpCompletePost } from '../functions/api/mp/complete';
+import { onRequestPost as mpAbortPost } from '../functions/api/mp/abort';
 import {
   onRequestDelete as videosDelete,
   onRequestGet as videosGet,
@@ -128,6 +137,101 @@ function createRemoteS3R2BucketAdapter(env: Env) {
         })
       );
     },
+    async put(
+      key: string,
+      value: ArrayBuffer | ArrayBufferView,
+      options?: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> }
+    ) {
+      const body =
+        value instanceof ArrayBuffer
+          ? new Uint8Array(value)
+          : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      const res = await s3.send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+          Body: body,
+          ContentType: options?.httpMetadata?.contentType,
+          Metadata: options?.customMetadata,
+        })
+      );
+      return {
+        key,
+        size: body.byteLength,
+        uploaded: new Date(),
+        etag: (res.ETag || '').replace(/"/g, ''),
+        httpEtag: res.ETag || '',
+      };
+    },
+    async createMultipartUpload(
+      key: string,
+      options?: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> }
+    ) {
+      const res = await s3.send(
+        new CreateMultipartUploadCommand({
+          Bucket: bucketName,
+          Key: key,
+          ContentType: options?.httpMetadata?.contentType,
+          Metadata: options?.customMetadata,
+        })
+      );
+      const uploadId = res.UploadId || '';
+      return this.resumeMultipartUpload(key, uploadId);
+    },
+    resumeMultipartUpload(key: string, uploadId: string) {
+      return {
+        key,
+        uploadId,
+        async uploadPart(partNumber: number, value: ArrayBuffer | ArrayBufferView) {
+          const body =
+            value instanceof ArrayBuffer
+              ? new Uint8Array(value)
+              : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+          const res = await s3.send(
+            new UploadPartCommand({
+              Bucket: bucketName,
+              Key: key,
+              UploadId: uploadId,
+              PartNumber: partNumber,
+              Body: body,
+            })
+          );
+          return {
+            partNumber,
+            etag: res.ETag || '',
+          };
+        },
+        async complete(parts: { partNumber: number; etag: string }[]) {
+          const res = await s3.send(
+            new CompleteMultipartUploadCommand({
+              Bucket: bucketName,
+              Key: key,
+              UploadId: uploadId,
+              MultipartUpload: {
+                Parts: parts.map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })),
+              },
+            })
+          );
+          const headRes = await s3.send(new HeadObjectCommand({ Bucket: bucketName, Key: key }));
+          return {
+            key,
+            size: headRes.ContentLength || 0,
+            uploaded: headRes.LastModified || new Date(),
+            etag: (res.ETag || '').replace(/"/g, ''),
+            httpEtag: res.ETag || '',
+          };
+        },
+        async abort() {
+          await s3.send(
+            new AbortMultipartUploadCommand({
+              Bucket: bucketName,
+              Key: key,
+              UploadId: uploadId,
+            })
+          );
+        },
+      };
+    },
   };
 }
 
@@ -148,6 +252,10 @@ class LocalDiskSandbox {
   private dir: string;
   private metaPath: string;
   public items = new Map<string, LocalObjectMeta>();
+  private multiparts = new Map<
+    string,
+    { key: string; contentType: string; parts: Map<number, { buf: Buffer; etag: string }> }
+  >();
 
   constructor(rootDir: string) {
     this.dir = path.join(rootDir, '.wrangler', 'local-r2-sandbox');
@@ -238,6 +346,86 @@ class LocalDiskSandbox {
           }
         }
         self.persist();
+      },
+      async put(
+        key: string,
+        value: ArrayBuffer | ArrayBufferView,
+        options?: { httpMetadata?: { contentType?: string } }
+      ) {
+        const buf =
+          value instanceof ArrayBuffer
+            ? Buffer.from(value)
+            : Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+        const ct = options?.httpMetadata?.contentType || 'video/mp4';
+        self.saveBuffer(key, buf, ct);
+        const item = self.items.get(key)!;
+        return {
+          key,
+          size: item.size,
+          uploaded: new Date(item.uploadedAt),
+          etag: item.etag.replace(/"/g, ''),
+          httpEtag: item.etag,
+        };
+      },
+      async createMultipartUpload(
+        key: string,
+        options?: { httpMetadata?: { contentType?: string } }
+      ) {
+        const uploadId = crypto.randomUUID();
+        const ct = options?.httpMetadata?.contentType || 'video/mp4';
+        self.multiparts.set(uploadId, {
+          key,
+          contentType: ct,
+          parts: new Map(),
+        });
+        return this.resumeMultipartUpload(key, uploadId);
+      },
+      resumeMultipartUpload(key: string, uploadId: string) {
+        return {
+          key,
+          uploadId,
+          async uploadPart(partNumber: number, value: ArrayBuffer | ArrayBufferView) {
+            const session = self.multiparts.get(uploadId);
+            if (!session || session.key !== key) {
+              throw new Error('分段上传会话不存在或已过期');
+            }
+            const buf =
+              value instanceof ArrayBuffer
+                ? Buffer.from(value)
+                : Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+            const etag = `"${crypto.createHash('md5').update(buf).digest('hex')}"`;
+            session.parts.set(partNumber, { buf, etag });
+            return { partNumber, etag };
+          },
+          async complete(parts: { partNumber: number; etag: string }[]) {
+            const session = self.multiparts.get(uploadId);
+            if (!session || session.key !== key) {
+              throw new Error('分段上传会话不存在或已过期');
+            }
+            const orderedBuffers: Buffer[] = [];
+            for (const p of parts) {
+              const saved = session.parts.get(p.partNumber);
+              if (!saved || saved.etag !== p.etag) {
+                throw new Error(`分片 #${p.partNumber} 校验失败`);
+              }
+              orderedBuffers.push(saved.buf);
+            }
+            const merged = Buffer.concat(orderedBuffers);
+            self.saveBuffer(key, merged, session.contentType);
+            self.multiparts.delete(uploadId);
+            const item = self.items.get(key)!;
+            return {
+              key,
+              size: item.size,
+              uploaded: new Date(item.uploadedAt),
+              etag: item.etag.replace(/"/g, ''),
+              httpEtag: item.etag,
+            };
+          },
+          async abort() {
+            self.multiparts.delete(uploadId);
+          },
+        };
       },
     };
   }
@@ -396,7 +584,7 @@ export function momDanceLocalApiPlugin(): Plugin {
               const usedGb = (currentTotalBytes / (1024 * 1024 * 1024)).toFixed(2);
               return Response.json(
                 {
-                  error: `云端存储空间已满（已用 ${usedGb}GB / 7GB 安全限额），请先提醒儿子在电脑管理端清空已下载的视频哦`,
+                  error: `云端存储空间已满（已用 ${usedGb}GB / 7.0GB 安全限额），请先在管理端清理已下载的视频`,
                 },
                 { status: 400 }
               );
@@ -418,6 +606,22 @@ export function momDanceLocalApiPlugin(): Plugin {
               danceTitle: resolved.danceTitle,
               contentType,
             });
+          }
+
+          if (pathname === '/api/mp/init' && method === 'POST') {
+            return mpInitPost({ request: webReq, env } as never);
+          }
+
+          if (pathname === '/api/mp/part' && method === 'PUT') {
+            return mpPartPut({ request: webReq, env } as never);
+          }
+
+          if (pathname === '/api/mp/complete' && method === 'POST') {
+            return mpCompletePost({ request: webReq, env } as never);
+          }
+
+          if (pathname === '/api/mp/abort' && method === 'POST') {
+            return mpAbortPost({ request: webReq, env } as never);
           }
 
           if (pathname === '/api/videos' && method === 'GET') {

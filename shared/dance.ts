@@ -1,4 +1,5 @@
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
+export const MP_PART_SIZE_BYTES = 8 * 1024 * 1024; // 8MB 分片（满足 R2 >=5MB 要求且远低于 Worker 100MB 限制）
 export const OVERSIZE_ERROR_MESSAGE = '视频太大啦（超过500M），请换个清晰度低一点的';
 export const VIDEO_PREFIX = 'videos/';
 export const QUICK_SUFFIXES = ['背面', '正面', '分解教学', '慢速'] as const;
@@ -26,6 +27,22 @@ export interface UploadUrlResponse {
   contentType: string;
 }
 
+export interface MpUploadInitResponse {
+  mode: 'single' | 'multipart';
+  objectKey: string;
+  uploadId: string;
+  partSize: number;
+  totalParts: number;
+  fileName: string;
+  danceTitle: string;
+  contentType: string;
+}
+
+export interface MpUploadedPartInfo {
+  partNumber: number;
+  etag: string;
+}
+
 export interface DownloadUrlResponse {
   downloadUrl: string;
   fileName: string;
@@ -49,7 +66,7 @@ export function sanitizeDanceName(raw: string): string {
 }
 
 /**
- * 点击快捷后缀标签追加到输入框末尾（防止长辈连续误触产生重复后缀）
+ * 点击快捷后缀标签追加到输入框末尾（防止连续误触产生重复后缀）
  */
 export function appendDanceSuffix(currentInput: string, suffix: string): string {
   const cleanSuffix = suffix.replace(/^[+_]+/, '').trim();

@@ -11,4 +11,6 @@ dist-ssr
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+project.private.config.json
+miniprogram/project.private.config.json
 

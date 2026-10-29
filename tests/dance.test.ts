@@ -300,3 +300,15 @@ describe('Cloudflare Pages Functions API', () => {
     expect(bucket.store.has('videos/2026-10-28/早安隆回.mp4')).toBe(false);
   });
 });
+
+describe('WeChat Mini Program Utils Parity', () => {
+  it('sanitizes names, appends suffixes, and parses WeChat temp paths identically', async () => {
+    const mpDance = await import('../miniprogram/utils/dance.js');
+    expect(mpDance.sanitizeDanceName('  苹果香/背面:高清...  ')).toBe('苹果香_背面_高清');
+    expect(mpDance.appendDanceSuffix('苹果香', '+分解教学')).toBe('苹果香_分解教学');
+    expect(mpDance.appendDanceSuffix('苹果香_分解教学', '分解教学')).toBe('苹果香_分解教学');
+    expect(mpDance.extractFileExtFromPath('wxfile://tmp_9a82b71c.MOV')).toBe('.mov');
+    expect(mpDance.guessContentTypeByExt('.mov')).toBe('video/quicktime');
+    expect(mpDance.formatFileSizeMB(25.6 * 1024 * 1024)).toBe('25.6 MB');
+  });
+});
