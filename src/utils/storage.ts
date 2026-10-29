@@ -65,6 +65,16 @@ export function setStoredPin(pin: string): void {
   safeSetItem(PIN_STORAGE_KEY, clean);
 }
 
+export function clearStoredPin(): void {
+  memoryPinFallback = '';
+  currentPinRef.value = '';
+  try {
+    window.localStorage.removeItem(PIN_STORAGE_KEY);
+  } catch {
+    // 忽略受限环境异常
+  }
+}
+
 /**
  * 已下载视频状态管理（基于 etag + key 存入 localStorage）
  */

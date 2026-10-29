@@ -11,11 +11,19 @@ import {
 } from '../utils/api';
 import { promptForAccessPin } from '../utils/auth-modal';
 import {
+  clearStoredPin,
   currentPinRef,
+  getStoredPin,
   isVideoDownloaded,
   markVideoDownloaded,
   pruneStaleDownloadedRecords,
+  setStoredPin,
 } from '../utils/storage';
+
+const isVerified = ref(false);
+const gatePinInput = ref('');
+const verifyingGate = ref(false);
+const gateError = ref('');
 
 const videos = ref<VideoItem[]>([]);
 const loading = ref(false);
@@ -113,15 +121,51 @@ async function loadVideos() {
     const list = await fetchVideoList();
     videos.value = list;
     pruneStaleDownloadedRecords(list);
+    isVerified.value = true;
   } catch (err) {
     if (err instanceof PinCancelledError) {
       loadError.value = '需要验证访问口令才能查看管理端列表';
+      isVerified.value = false;
     } else {
       loadError.value = err instanceof Error ? err.message : '加载视频列表失败';
     }
   } finally {
     loading.value = false;
   }
+}
+
+async function handleUnlockAdmin() {
+  const pin = gatePinInput.value.trim();
+  if (!pin) {
+    gateError.value = '请输入访问口令';
+    return;
+  }
+  verifyingGate.value = true;
+  gateError.value = '';
+  setStoredPin(pin);
+  try {
+    const list = await fetchVideoList();
+    videos.value = list;
+    pruneStaleDownloadedRecords(list);
+    isVerified.value = true;
+    gatePinInput.value = '';
+    showToast('✅ 身份验证通过，已进入管理端');
+  } catch {
+    clearStoredPin();
+    isVerified.value = false;
+    gateError.value = '访问口令不正确，请重新输入';
+  } finally {
+    verifyingGate.value = false;
+  }
+}
+
+function handleLockAdmin() {
+  clearStoredPin();
+  isVerified.value = false;
+  videos.value = [];
+  gatePinInput.value = '';
+  gateError.value = '';
+  showToast('已退出登录并锁定管理端');
 }
 
 async function handleDownloadSingle(video: VideoItem) {
@@ -272,7 +316,12 @@ async function copyMomUploadLink() {
 }
 
 onMounted(() => {
-  loadVideos();
+  const existing = getStoredPin();
+  if (existing) {
+    loadVideos();
+  } else {
+    isVerified.value = false;
+  }
 });
 
 onBeforeUnmount(() => {
@@ -285,58 +334,135 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 text-slate-900 pb-16">
-    <!-- 顶部管理栏 -->
-    <header class="border-b border-slate-200 bg-white shadow-sm">
-      <div class="mx-auto max-w-5xl px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2.5">
-            <span class="text-2xl">📼</span>
-            <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900">
-              广场舞视频中转站 · 子女下载管理端
-            </h1>
+  <div>
+    <!-- 1. 未通过验证时的专属管理端锁屏门禁 -->
+    <div
+      v-if="!isVerified"
+      class="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-12"
+    >
+      <div class="w-full max-w-md rounded-3xl bg-white p-7 sm:p-9 shadow-2xl border border-slate-200">
+        <div class="flex items-center gap-3.5 mb-5">
+          <span
+            class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-3xl shadow-sm text-white"
+          >
+            🔒
+          </span>
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900">
+              管理端身份验证
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
+              子女管理后台受口令保护，外人无权查看
+            </p>
           </div>
-          <p class="mt-1 text-sm text-slate-500">
-            下载落地自动保留老妈填写的中文舞名，可直接拖入 U 盘；云端文件 14 天到期自动清理
-          </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2.5">
+        <p class="text-sm text-slate-600 mb-5 leading-relaxed">
+          请输入 Cloudflare 环境变量中配置的访问口令（ACCESS_PIN），验证成功后方可查看视频列表与执行下载管理。
+        </p>
+
+        <form @submit.prevent="handleUnlockAdmin" class="space-y-4">
+          <div>
+            <input
+              v-model="gatePinInput"
+              type="password"
+              autocomplete="off"
+              placeholder="请输入管理访问口令"
+              class="w-full rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-3.5 text-base font-bold text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-slate-200 transition"
+            />
+            <p
+              v-if="gateError"
+              class="mt-2.5 rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs sm:text-sm font-bold text-red-700"
+            >
+              ⚠️ {{ gateError }}
+            </p>
+          </div>
+
           <button
-            type="button"
-            @click="copyMomUploadLink"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition"
+            type="submit"
+            :disabled="verifyingGate"
+            class="w-full rounded-xl bg-slate-900 px-4 py-3.5 text-base font-extrabold text-white shadow-md hover:bg-slate-800 active:scale-[0.99] disabled:opacity-50 transition"
           >
-            <span>📋</span>
-            <span>复制老妈微信上传链接</span>
+            {{ verifyingGate ? '验证中...' : '解锁并进入管理端' }}
           </button>
-          <RouterLink
-            to="/"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-          >
-            <span>📱</span>
-            <span>长辈上传页</span>
+        </form>
+
+        <div class="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <RouterLink to="/" class="hover:text-slate-900 font-semibold transition flex items-center gap-1">
+            <span>←</span>
+            <span>返回长辈上传页</span>
           </RouterLink>
-          <button
-            type="button"
-            @click="handleChangePin"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-          >
-            <span>🔑</span>
-            <span>口令</span>
-          </button>
-          <button
-            type="button"
-            @click="loadVideos"
-            :disabled="loading"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
-          >
-            <span :class="loading ? 'animate-spin' : ''">🔄</span>
-            <span>刷新</span>
-          </button>
+          <span class="text-slate-400">广场舞中转站 · 安全门禁</span>
         </div>
       </div>
-    </header>
+    </div>
+
+    <!-- 2. 验证通过后展示完整管理面板 -->
+    <div v-else class="min-h-screen bg-slate-50 text-slate-900 pb-16">
+      <!-- 顶部管理栏 -->
+      <header class="border-b border-slate-200 bg-white shadow-sm">
+        <div class="mx-auto max-w-5xl px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">📼</span>
+              <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900">
+                广场舞视频中转站 · 子女下载管理端
+              </h1>
+            </div>
+            <p class="mt-1 text-sm text-slate-500">
+              下载落地自动保留老妈填写的中文舞名，可直接拖入 U 盘；云端文件 14 天到期自动清理
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-bold text-emerald-800">
+              <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>已授权</span>
+            </span>
+            <button
+              type="button"
+              @click="copyMomUploadLink"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition"
+            >
+              <span>📋</span>
+              <span>复制老妈微信上传链接</span>
+            </button>
+            <RouterLink
+              to="/"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            >
+              <span>📱</span>
+              <span>长辈上传页</span>
+            </RouterLink>
+            <button
+              type="button"
+              @click="handleChangePin"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            >
+              <span>🔑</span>
+              <span>重设口令</span>
+            </button>
+            <button
+              type="button"
+              @click="loadVideos"
+              :disabled="loading"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
+            >
+              <span :class="loading ? 'animate-spin' : ''">🔄</span>
+              <span>刷新</span>
+            </button>
+            <button
+              type="button"
+              @click="handleLockAdmin"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+              title="退出登录并锁定管理端"
+            >
+              <span>🔒</span>
+              <span>退出锁定</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
     <main class="mx-auto max-w-5xl px-4 sm:px-6 pt-6 space-y-6">
       <!-- 顶部浮动通知提示 -->
@@ -681,5 +807,6 @@ onBeforeUnmount(() => {
       @confirm="handleConfirmModalAction"
       @cancel="confirmModal.visible = false"
     />
+    </div>
   </div>
 </template>

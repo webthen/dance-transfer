@@ -11,8 +11,39 @@ import {
 } from '../../shared/dance';
 import DialogModal from '../components/DialogModal.vue';
 import { PinCancelledError, requestUploadUrl, uploadVideoDirectToR2 } from '../utils/api';
+import { currentPinRef, setStoredPin } from '../utils/storage';
 
 type UploadStage = 'idle' | 'uploading' | 'success' | 'error';
+
+const gatePinInput = ref('');
+const verifyingGate = ref(false);
+const gatePinError = ref('');
+
+async function handleUnlockUpload() {
+  const pin = gatePinInput.value.trim();
+  if (!pin) {
+    gatePinError.value = '请输入访问口令';
+    return;
+  }
+  verifyingGate.value = true;
+  gatePinError.value = '';
+  try {
+    const res = await fetch('/api/videos', {
+      headers: { 'x-access-pin': pin },
+    });
+    if (res.status === 401) {
+      gatePinError.value = '口令不正确，请向家人索取正确的口令哦';
+      return;
+    }
+    setStoredPin(pin);
+    gatePinInput.value = '';
+  } catch {
+    setStoredPin(pin);
+    gatePinInput.value = '';
+  } finally {
+    verifyingGate.value = false;
+  }
+}
 
 const danceNameInput = ref('');
 const danceInputRef = ref<HTMLInputElement | null>(null);
@@ -250,9 +281,61 @@ onBeforeUnmount(() => {
         </p>
       </header>
 
-      <!-- 状态一：上传成功全屏/大字反馈页 -->
+      <!-- 口令门禁卡片（针对无口令直接访问首页的访客） -->
       <section
-        v-if="stage === 'success'"
+        v-if="!currentPinRef"
+        class="rounded-3xl border-2 border-stone-200 bg-white p-7 sm:p-9 text-center shadow-xl space-y-6"
+      >
+        <div
+          class="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-rose-100 text-4xl shadow-inner"
+        >
+          🔑
+        </div>
+
+        <div>
+          <h2 class="text-[26px] font-black text-stone-900">
+            请输入访问口令
+          </h2>
+          <p class="mt-2 text-[18px] text-stone-600 leading-relaxed">
+            为了防止外人乱传视频，本站仅限家人使用
+          </p>
+        </div>
+
+        <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-left">
+          <p class="text-[17px] font-bold text-amber-900 mb-1">
+            👵 长辈温馨提示：
+          </p>
+          <p class="text-[16px] text-amber-800 leading-relaxed">
+            请直接点击微信里孩子发送的<strong>专属链接</strong>，即可直接进入免密上传。
+          </p>
+        </div>
+
+        <form @submit.prevent="handleUnlockUpload" class="space-y-4">
+          <input
+            v-model="gatePinInput"
+            type="text"
+            autocomplete="off"
+            placeholder="请输入访问口令"
+            class="w-full rounded-2xl border-2 border-stone-300 bg-stone-50 px-4 py-4 text-[22px] font-bold text-stone-900 placeholder:text-stone-400 focus:border-rose-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-rose-100"
+          />
+          <p v-if="gatePinError" class="text-red-600 font-bold text-[18px]">
+            ⚠️ {{ gatePinError }}
+          </p>
+          <button
+            type="submit"
+            :disabled="verifyingGate"
+            class="w-full min-h-[64px] rounded-2xl bg-rose-600 px-6 py-4 text-[22px] font-extrabold text-white shadow-lg hover:bg-rose-700 active:scale-[0.99] disabled:opacity-50 transition"
+          >
+            {{ verifyingGate ? '验证中...' : '进入传送站' }}
+          </button>
+        </form>
+      </section>
+
+      <!-- 已授权时长辈正常上传交互区 -->
+      <template v-else>
+        <!-- 状态一：上传成功全屏/大字反馈页 -->
+        <section
+          v-if="stage === 'success'"
         class="rounded-3xl border-2 border-emerald-300 bg-white p-7 sm:p-9 text-center shadow-xl"
       >
         <div
@@ -479,6 +562,7 @@ onBeforeUnmount(() => {
           </p>
         </div>
       </section>
+      </template>
     </div>
 
     <!-- 超大号弹窗提示（如超过 500M 提示） -->
