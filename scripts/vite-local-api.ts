@@ -385,8 +385,26 @@ export function momDanceLocalApiPlugin(): Plugin {
                 : 'video/mp4';
             const cleanExt = normalizeFileExt(String(body.fileExt || ''), contentType);
             const today = getBeijingDateString();
-            const listed = await env.BUCKET.list({ prefix: `${VIDEO_PREFIX}${today}/` });
-            const existingKeys = new Set(listed.objects.map((o) => o.key));
+            const todayPrefix = `${VIDEO_PREFIX}${today}/`;
+
+            const listed = await env.BUCKET.list({ prefix: VIDEO_PREFIX });
+            const currentTotalBytes = listed.objects.reduce((acc, obj) => acc + (obj.size || 0), 0);
+            const maxStorageGb = Number(env.MAX_TOTAL_STORAGE_GB) > 0 ? Number(env.MAX_TOTAL_STORAGE_GB) : 7.0;
+            const maxStorageBytes = maxStorageGb * 1024 * 1024 * 1024;
+
+            if (currentTotalBytes + fileSize > maxStorageBytes) {
+              const usedGb = (currentTotalBytes / (1024 * 1024 * 1024)).toFixed(2);
+              return Response.json(
+                {
+                  error: `云端存储空间已满（已用 ${usedGb}GB / 7GB 安全限额），请先提醒儿子在电脑管理端清空已下载的视频哦`,
+                },
+                { status: 400 }
+              );
+            }
+
+            const existingKeys = new Set(
+              listed.objects.filter((o) => o.key.startsWith(todayPrefix)).map((o) => o.key)
+            );
             const resolved = resolveUniqueSameDayObject(
               cleanDanceName,
               cleanExt,

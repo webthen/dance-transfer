@@ -45,9 +45,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const todayStr = getBeijingDateString();
   const todayPrefix = `${VIDEO_PREFIX}${todayStr}/`;
 
-  // 检查同一天已存在的同名视频，若同名自动追加 _(2)、_(3)
-  const todayObjects = await listAllObjectsByPrefix(env.BUCKET, todayPrefix);
-  const existingKeys = new Set(todayObjects.map((obj) => obj.key));
+  // 1. 获取当前所有视频对象，统计总存储容量，严格锁死在安全限额内（默认 7.0GB，留出 3GB 绝对安全缓冲防扣费）
+  const allObjects = await listAllObjectsByPrefix(env.BUCKET, VIDEO_PREFIX);
+  const currentTotalBytes = allObjects.reduce((acc, obj) => acc + (obj.size || 0), 0);
+  const maxStorageGb = Number(env.MAX_TOTAL_STORAGE_GB) > 0 ? Number(env.MAX_TOTAL_STORAGE_GB) : 7.0;
+  const maxStorageBytes = maxStorageGb * 1024 * 1024 * 1024;
+
+  if (currentTotalBytes + fileSize > maxStorageBytes) {
+    const usedGb = (currentTotalBytes / (1024 * 1024 * 1024)).toFixed(2);
+    return jsonResponse(
+      {
+        error: `云端存储空间已满（已用 ${usedGb}GB / 7GB 安全限额），请先提醒儿子在电脑管理端清空已下载的视频哦`,
+      },
+      400
+    );
+  }
+
+  // 2. 检查同一天已存在的同名视频，若同名自动追加 _(2)、_(3)
+  const existingKeys = new Set(
+    allObjects.filter((obj) => obj.key.startsWith(todayPrefix)).map((obj) => obj.key)
+  );
 
   const { objectKey, fileName, danceTitle } = resolveUniqueSameDayObject(
     cleanDanceName,

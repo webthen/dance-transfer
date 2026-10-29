@@ -35,7 +35,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }))
     .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
 
-  return jsonResponse(videos);
+  const maxStorageGb = Number(env.MAX_TOTAL_STORAGE_GB) > 0 ? Number(env.MAX_TOTAL_STORAGE_GB) : 7.0;
+
+  return jsonResponse(videos, 200, {
+    'x-storage-limit-gb': String(maxStorageGb),
+  });
 };
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {

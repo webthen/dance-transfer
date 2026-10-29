@@ -182,6 +182,27 @@ describe('Cloudflare Pages Functions API', () => {
     const bucket = new FakeR2Bucket();
     const env = createTestEnv(bucket);
 
+    // 存储桶达到上限时自动拦截（防超出免费额度）
+    env.MAX_TOTAL_STORAGE_GB = '1'; // 模拟设置为 1GB
+    bucket.seed('videos/2026-10-28/old_large_dance.mp4', 1024 * 1024 * 1024, new Date());
+    const quotaReq = new Request('https://example.com/api/upload-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        danceName: '苹果香',
+        fileExt: '.mp4',
+        fileSize: 10 * 1024 * 1024,
+        contentType: 'video/mp4',
+      }),
+    });
+    const quotaRes = await uploadUrlPost(makePagesContext(quotaReq, env));
+    expect(quotaRes.status).toBe(400);
+    const quotaJson = (await quotaRes.json()) as { error: string };
+    expect(quotaJson.error).toContain('云端存储空间已满');
+
+    // 恢复正常容量限制（默认 7GB）
+    delete env.MAX_TOTAL_STORAGE_GB;
+    bucket.store.clear();
+
     // 超过 500MB 拦截
     const overReq = new Request('https://example.com/api/upload-url', {
       method: 'POST',

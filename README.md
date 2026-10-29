@@ -61,7 +61,8 @@ mom-dance-videos
 [
   {
     "AllowedOrigins": [
-      "https://你的域名.com",
+      "https://dance.lage.us.ci",
+      "https://lage.us.ci",
       "http://localhost:5173"
     ],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
@@ -102,6 +103,7 @@ mom-dance-videos
    - `R2_ACCESS_KEY_ID`：第三步生成的 R2 Access Key ID
    - `R2_SECRET_ACCESS_KEY`：第三步生成的 R2 Secret Access Key
    - `R2_BUCKET_NAME`：`mom-dance-videos`（可选，默认即为 `mom-dance-videos`）
+   - `MAX_TOTAL_STORAGE_GB`：存储上限配额（可选，默认 `7`，单位 GB，锁定在 7GB 自动拒收，确保距离 10GB 扣费门槛永远有 3GB 安全缓冲）
 5. 重新触发一次部署即可上线：
    - 把 `https://你的域名.com/?pin=mom666` 发到老妈微信并让她收藏（手机首次点开自动记住口令）。
    - 自己在电脑浏览器收藏 `https://你的域名.com/admin` 下载拷 U 盘。

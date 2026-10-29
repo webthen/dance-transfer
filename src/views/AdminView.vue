@@ -7,6 +7,7 @@ import {
   deleteVideos,
   fetchVideoList,
   requestDownloadUrl,
+  storageLimitGbRef,
 } from '../utils/api';
 import { promptForAccessPin } from '../utils/auth-modal';
 import {
@@ -48,6 +49,31 @@ const confirmModal = ref<{
 const unreadVideos = computed(() => videos.value.filter((v) => !isVideoDownloaded(v)));
 const downloadedVideos = computed(() => videos.value.filter((v) => isVideoDownloaded(v)));
 const totalSizeBytes = computed(() => videos.value.reduce((acc, cur) => acc + cur.size, 0));
+
+const FREE_TIER_TOTAL_GB = 10.0; // Cloudflare R2 官方每月免费额度 10GB
+const safetyLimitGb = computed(() => storageLimitGbRef.value || 7.0);
+const totalSizeGb = computed(() => totalSizeBytes.value / (1024 * 1024 * 1024));
+
+// 10GB 免费层剩余额度
+const remainingFreeTierGb = computed(() =>
+  Math.max(0, FREE_TIER_TOTAL_GB - totalSizeGb.value)
+);
+
+// 7GB 安全拦截限额剩余额度
+const remainingSafetyGb = computed(() =>
+  Math.max(0, safetyLimitGb.value - totalSizeGb.value)
+);
+
+// 占用 7GB 安全限额的百分比
+const safetyUsagePercent = computed(() => {
+  if (safetyLimitGb.value <= 0) return 0;
+  return Math.min(100, Math.round((totalSizeGb.value / safetyLimitGb.value) * 100));
+});
+
+// 占用 10GB 免费总额度的百分比
+const freeTierUsagePercent = computed(() => {
+  return Math.min(100, Math.round((totalSizeGb.value / FREE_TIER_TOTAL_GB) * 100));
+});
 
 function showToast(msg: string) {
   toastMessage.value = msg;
@@ -327,6 +353,126 @@ onBeforeUnmount(() => {
           ✕
         </button>
       </div>
+
+      <!-- Cloudflare R2 存储额度与 7G 安全拦截监控面板 -->
+      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">☁️</span>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-900">
+                Cloudflare R2 存储额度监控
+              </h2>
+              <p class="text-xs text-slate-500">
+                代码内置 7G 硬配额拦截器，永远预留 3G 安全缓冲，彻底杜绝扣费
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+              🛡️ 7G 自动拒收保护生效中
+            </span>
+          </div>
+        </div>
+
+        <!-- 3 个核心容量指标卡片 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <!-- 卡片 1：当前占用 -->
+          <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div class="text-xs font-medium text-slate-500 mb-1">当前云端总占用</div>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-2xl font-black text-slate-900 tabular-nums">
+                {{ totalSizeGb < 0.01 && totalSizeBytes > 0 ? '< 0.01' : totalSizeGb.toFixed(2) }}
+              </span>
+              <span class="text-sm font-bold text-slate-600">GB</span>
+              <span class="text-xs text-slate-400">({{ formatFileSizeMB(totalSizeBytes) }})</span>
+            </div>
+            <div class="mt-1.5 text-xs text-slate-500">
+              共 {{ videos.length }} 个视频文件
+            </div>
+          </div>
+
+          <!-- 卡片 2：7G 安全限额剩余 -->
+          <div class="rounded-xl border border-blue-200/70 bg-blue-50/70 p-4">
+            <div class="text-xs font-bold text-blue-800 mb-1 flex items-center justify-between">
+              <span>7G 安全限额剩余</span>
+              <span class="rounded bg-blue-200/80 px-1.5 py-0.5 text-[10px] font-extrabold text-blue-900">
+                硬配额拦截
+              </span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-2xl font-black text-blue-900 tabular-nums">
+                {{ remainingSafetyGb.toFixed(2) }}
+              </span>
+              <span class="text-sm font-bold text-blue-800">GB</span>
+              <span class="text-xs text-blue-600 font-semibold">可用</span>
+            </div>
+            <div class="mt-1.5 text-xs text-blue-700">
+              已用 {{ safetyUsagePercent }}%（超 7G 自动阻断长辈上传）
+            </div>
+          </div>
+
+          <!-- 卡片 3：10G 免费额度剩余 -->
+          <div class="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-4">
+            <div class="text-xs font-bold text-emerald-800 mb-1 flex items-center justify-between">
+              <span>10G 免费额度剩余</span>
+              <span class="rounded bg-emerald-200/80 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-900">
+                Cloudflare 免费层
+              </span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-2xl font-black text-emerald-900 tabular-nums">
+                {{ remainingFreeTierGb.toFixed(2) }}
+              </span>
+              <span class="text-sm font-bold text-emerald-800">GB</span>
+              <span class="text-xs text-emerald-600 font-semibold">剩余</span>
+            </div>
+            <div class="mt-1.5 text-xs text-emerald-700">
+              距离扣费门槛还有 {{ remainingFreeTierGb.toFixed(2) }} GB 缓冲区
+            </div>
+          </div>
+        </div>
+
+        <!-- 进度条可视化 -->
+        <div class="pt-1">
+          <div class="flex items-center justify-between text-xs text-slate-500 mb-1.5 font-medium">
+            <span>
+              已用存储：{{ totalSizeGb.toFixed(2) }} GB / 10.00 GB 官方免费额度
+            </span>
+            <span class="text-slate-600">
+              官方免费额度占用 {{ freeTierUsagePercent }}%
+            </span>
+          </div>
+
+          <!-- 可视化进度槽 -->
+          <div class="relative h-3 w-full rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+            <!-- 7G 硬拦截标记线 -->
+            <div
+              class="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-10"
+              style="left: 70%;"
+              title="7GB 自动拒收拦截线"
+            ></div>
+            <!-- 当前已用进度条 -->
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              :class="[
+                safetyUsagePercent >= 90
+                  ? 'bg-red-500'
+                  : safetyUsagePercent >= 70
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500',
+              ]"
+              :style="{ width: `${Math.min(100, Math.max(totalSizeBytes > 0 ? 1 : 0, freeTierUsagePercent))}%` }"
+            ></div>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+            <span>0 GB</span>
+            <span class="text-amber-700 font-bold">▲ 7 GB 自动拦截线（预留 3GB 缓冲）</span>
+            <span class="text-slate-600 font-semibold">10 GB 扣费门槛</span>
+          </div>
+        </div>
+      </section>
 
       <!-- 统计与批量操作工具栏 -->
       <section class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">

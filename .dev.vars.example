@@ -9,3 +9,6 @@ R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 
 # R2 存储桶名称（可选，默认 mom-dance-videos）
 R2_BUCKET_NAME=mom-dance-videos
+
+# 存储空间安全硬配额上限（GB，可选，默认 7GB，严格保护在 Cloudflare 10GB 免费层以内，预留 3GB 绝对缓冲）
+MAX_TOTAL_STORAGE_GB=7

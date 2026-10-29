@@ -6,6 +6,9 @@ import type {
 } from '../../shared/dance';
 import { promptForAccessPin } from './auth-modal';
 import { getStoredPin } from './storage';
+import { ref } from 'vue';
+
+export const storageLimitGbRef = ref<number>(7.0);
 
 export class PinCancelledError extends Error {
   constructor(message = '未输入访问口令') {
@@ -45,6 +48,14 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
       }
       pin = nextPin;
       continue;
+    }
+
+    const limitHeader = response.headers.get('x-storage-limit-gb');
+    if (limitHeader) {
+      const parsed = parseFloat(limitHeader);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        storageLimitGbRef.value = parsed;
+      }
     }
 
     let payload: unknown = null;
