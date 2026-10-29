@@ -1,0 +1,11 @@
+# 访问口令（必填）：长辈首次访问 https://你的域名.com/?pin=mom666 自动记住
+ACCESS_PIN=mom666
+
+# Cloudflare R2 S3 API 凭证（必填，用于生成 Presigned PUT / GET 直传与下载链接）
+# 获取方式：Cloudflare 控制台 -> R2 -> 管理 R2 API 令牌 -> 创建具有对象读写权限的 API 令牌
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+
+# R2 存储桶名称（可选，默认 mom-dance-videos）
+R2_BUCKET_NAME=mom-dance-videos

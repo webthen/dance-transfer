@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.wrangler
+.dev.vars
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
