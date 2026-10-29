@@ -29,6 +29,7 @@ export function createR2S3Client(env: Env): S3Client {
   return new S3Client({
     region: 'auto',
     endpoint: resolveEndpoint(env.R2_ACCOUNT_ID),
+    forcePathStyle: true, // 使用路径样式 (endpoint/bucket/key)，避免两级子域名引发浏览器 ERR_SSL_VERSION_OR_CIPHER_MISMATCH
     credentials: {
       accessKeyId: env.R2_ACCESS_KEY_ID.trim(),
       secretAccessKey: env.R2_SECRET_ACCESS_KEY.trim(),
