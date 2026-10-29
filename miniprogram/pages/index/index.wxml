@@ -188,13 +188,25 @@
     </block>
   </view>
 
-  <!-- 大字提示弹窗（如超过 500M 提示） -->
+  <!-- 大字提示弹窗（如超过 500M 提示 / 权限引导提示） -->
   <view wx:if="{{alertVisible}}" class="modal-mask">
     <view class="modal-box">
-      <view class="modal-icon">🎬</view>
+      <view class="modal-icon">{{alertIcon || '🎬'}}</view>
       <view class="modal-title">{{alertTitle}}</view>
       <view class="modal-msg">{{alertMessage}}</view>
-      <button class="btn-primary" bindtap="closeLargeAlert">我知道了</button>
+      <button
+        wx:if="{{alertAction === 'openSetting'}}"
+        class="btn-primary mb-gap"
+        bindtap="handleOpenSetting"
+      >
+        前往设置开启
+      </button>
+      <button
+        class="{{alertAction === 'openSetting' ? 'btn-outline' : 'btn-primary'}}"
+        bindtap="closeLargeAlert"
+      >
+        {{alertAction === 'openSetting' ? '暂不开启' : '我知道了'}}
+      </button>
     </view>
   </view>
 

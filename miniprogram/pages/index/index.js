@@ -60,6 +60,8 @@ Page({
     alertVisible: false,
     alertTitle: '温馨提示',
     alertMessage: '',
+    alertIcon: '🎬',
+    alertAction: '',
 
     // 微信官方隐私保护指引授权弹窗
     showPrivacyModal: false,
@@ -226,16 +228,32 @@ Page({
 
   // ================== 表单与快捷标签逻辑 ==================
 
-  showLargeAlert(title, message) {
+  showLargeAlert(title, message, options = {}) {
     this.setData({
       alertVisible: true,
       alertTitle: title || '温馨提示',
       alertMessage: message || '',
+      alertIcon: options.icon || '🎬',
+      alertAction: options.action || '',
     });
   },
 
   closeLargeAlert() {
-    this.setData({ alertVisible: false });
+    this.setData({
+      alertVisible: false,
+      alertAction: '',
+    });
+  },
+
+  handleOpenSetting() {
+    this.setData({ alertVisible: false, alertAction: '' });
+    if (typeof wx.openSetting === 'function') {
+      wx.openSetting({
+        fail(err) {
+          console.warn('[openSetting fail]', err);
+        },
+      });
+    }
   },
 
   onDanceNameInput(e) {
@@ -289,7 +307,21 @@ Page({
   // ================== 选视频与分片上传逻辑 ==================
 
   pickAlbumVideoOriginal() {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      // 1. 若支持微信官方隐私协议鉴权，先主动触发合规检测
+      if (typeof wx.requirePrivacyAuthorize === 'function') {
+        await new Promise((res) => {
+          wx.requirePrivacyAuthorize({
+            success: () => res(true),
+            fail: (err) => {
+              console.warn('[requirePrivacyAuthorize fail]', err);
+              res(false);
+            },
+          });
+        });
+      }
+
+      // 2. 调用官方选取媒体接口
       if (typeof wx.chooseMedia === 'function') {
         wx.chooseMedia({
           count: 1,
@@ -308,6 +340,7 @@ Page({
             });
           },
           fail(err) {
+            console.error('[chooseMedia fail]', err);
             reject(err);
           },
         });
@@ -322,6 +355,7 @@ Page({
             });
           },
           fail(err) {
+            console.error('[chooseVideo fail]', err);
             reject(err);
           },
         });
@@ -340,14 +374,45 @@ Page({
     try {
       picked = await this.pickAlbumVideoOriginal();
     } catch (err) {
-      const msg = (err && err.errMsg) || '';
+      const msg = (err && err.errMsg) || (typeof err === 'string' ? err : '');
+      console.warn('[handleSelectAndUpload catch]', err);
+
       if (msg.includes('cancel')) {
         return; // 用户主动取消选视频，静默返回
       }
-      if (msg.includes('privacy') || msg.includes('authorize') || msg.includes('auth deny')) {
-        this.showLargeAlert('需要相册访问权限', '请允许小程序读取手机相册以便选择要上传的舞蹈视频');
+
+      // 微信隐私指引在腾讯后台尚未审核完成或未生效
+      if (
+        msg.includes('api scope is not declared in the privacy agreement') ||
+        (msg.includes('privacy') && msg.includes('declared'))
+      ) {
+        this.showLargeAlert(
+          '微信隐私指引生效中',
+          '后台刚提交的《用户隐私保护指引》需微信官方审核数分钟。审核通过后，请下拉微信聊天界面删除本小程序并重新扫码进入。',
+          { icon: '⏳' }
+        );
         return;
       }
+
+      // 系统相册访问权限被拒绝（iOS / Android 系统权限）
+      if (msg.includes('auth deny') || msg.includes('authorize:fail')) {
+        this.showLargeAlert(
+          '需要相册访问权限',
+          '小程序相册权限未开启。请点击下方按钮前往设置页面开启相册权限。',
+          { action: 'openSetting', icon: '🔒' }
+        );
+        return;
+      }
+
+      if (msg.includes('privacy') || msg.includes('authorize')) {
+        this.showLargeAlert(
+          '需要相册访问权限',
+          '请允许小程序读取手机相册以便选择要上传的视频。若刚在后台更新了隐私协议，请稍候几分钟微信后台生效。',
+          { icon: '🛡️' }
+        );
+        return;
+      }
+
       this.showLargeAlert('选取视频未成功', msg || '无法读取相册视频，请重试');
       return;
     }
