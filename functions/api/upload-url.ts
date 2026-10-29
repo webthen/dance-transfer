@@ -83,5 +83,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     contentType,
   };
 
-  return jsonResponse(responseData);
+  return jsonResponse(responseData, 200, {
+    'x-app-version': '1.0.1-pathstyle',
+  });
 };
