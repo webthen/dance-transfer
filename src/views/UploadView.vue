@@ -32,7 +32,7 @@ async function handleUnlockUpload() {
       headers: { 'x-access-pin': pin },
     });
     if (res.status === 401) {
-      gatePinError.value = '口令不正确，请向家人索取正确的口令哦';
+      gatePinError.value = '访问口令不正确，请重新输入';
       return;
     }
     setStoredPin(pin);
@@ -118,7 +118,7 @@ function handleSelectVideoClick(event: MouseEvent) {
     triggerNameRequiredFeedback();
     return;
   }
-  // 清空旧 value，确保长辈重复选择同一个视频也能正常触发 change 事件
+  // 清空旧 value，确保重复选择同一个视频也能正常触发 change 事件
   if (fileInputRef.value) {
     fileInputRef.value.value = '';
   }
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
           💃 广场舞视频传送站
         </h1>
         <p class="mt-2 text-[19px] font-medium text-stone-700">
-          写好舞蹈名字，把视频传给儿子拷 U 盘
+          填写舞蹈名称，快速直传云端待下载
         </p>
       </header>
 
@@ -297,16 +297,16 @@ onBeforeUnmount(() => {
             请输入访问口令
           </h2>
           <p class="mt-2 text-[18px] text-stone-600 leading-relaxed">
-            为了防止外人乱传视频，本站仅限家人使用
+            本站点受访问口令保护，请输入口令进入
           </p>
         </div>
 
-        <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-left">
-          <p class="text-[17px] font-bold text-amber-900 mb-1">
-            👵 长辈温馨提示：
+        <div class="rounded-2xl bg-blue-50 border border-blue-200 p-4 text-left">
+          <p class="text-[17px] font-bold text-blue-900 mb-1">
+            💡 使用提示：
           </p>
-          <p class="text-[16px] text-amber-800 leading-relaxed">
-            请直接点击微信里孩子发送的<strong>专属链接</strong>，即可直接进入免密上传。
+          <p class="text-[16px] text-blue-800 leading-relaxed">
+            如已收到带有口令的<strong>专属链接</strong>，直接点击打开即可免密使用。
           </p>
         </div>
 
@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
         </form>
       </section>
 
-      <!-- 已授权时长辈正常上传交互区 -->
+      <!-- 已授权时正常上传交互区 -->
       <template v-else>
         <!-- 状态一：上传成功全屏/大字反馈页 -->
         <section
@@ -345,11 +345,11 @@ onBeforeUnmount(() => {
         </div>
 
         <h2 class="text-[26px] sm:text-[30px] font-black leading-snug text-stone-900 break-words">
-          ✅《{{ succeededDanceTitle }}》上传成功！儿子收到啦
+          ✅《{{ succeededDanceTitle }}》上传成功！已存入云端待下载
         </h2>
 
         <p class="mt-4 text-[20px] leading-relaxed text-stone-700">
-          视频已经稳稳传好啦，现在可以放心退出，或者继续传下一支舞。
+          视频已成功传输至云端中转站，现在可以安全退出，或继续上传下一个视频。
         </p>
 
         <button

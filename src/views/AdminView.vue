@@ -309,7 +309,7 @@ async function copyMomUploadLink() {
 
   try {
     await navigator.clipboard.writeText(link);
-    showToast('✅ 已复制老妈专属上传链接，可直接粘贴到微信发给老妈！');
+    showToast('✅ 已复制快捷上传链接，可直接粘贴发送给上传用户！');
   } catch {
     showToast(`上传链接：${link}`);
   }
@@ -352,7 +352,7 @@ onBeforeUnmount(() => {
               管理端身份验证
             </h2>
             <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
-              子女管理后台受口令保护，外人无权查看
+              管理后台受口令保护，未经授权无权访问
             </p>
           </div>
         </div>
@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
         <div class="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <RouterLink to="/" class="hover:text-slate-900 font-semibold transition flex items-center gap-1">
             <span>←</span>
-            <span>返回长辈上传页</span>
+            <span>返回视频上传页</span>
           </RouterLink>
           <span class="text-slate-400">广场舞中转站 · 安全门禁</span>
         </div>
@@ -406,11 +406,11 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-2.5">
               <span class="text-2xl">📼</span>
               <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900">
-                广场舞视频中转站 · 子女下载管理端
+                广场舞视频中转站 · 视频管理与下载
               </h1>
             </div>
             <p class="mt-1 text-sm text-slate-500">
-              下载落地自动保留老妈填写的中文舞名，可直接拖入 U 盘；云端文件 14 天到期自动清理
+              下载落地自动保留原中文名称，方便保存与拷贝；云端文件 14 天到期自动清理
             </p>
           </div>
 
@@ -425,14 +425,14 @@ onBeforeUnmount(() => {
               class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition"
             >
               <span>📋</span>
-              <span>复制老妈微信上传链接</span>
+              <span>复制快捷上传链接</span>
             </button>
             <RouterLink
               to="/"
               class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
             >
               <span>📱</span>
-              <span>长辈上传页</span>
+              <span>视频上传页</span>
             </RouterLink>
             <button
               type="button"
@@ -534,7 +534,7 @@ onBeforeUnmount(() => {
               <span class="text-xs text-blue-600 font-semibold">可用</span>
             </div>
             <div class="mt-1.5 text-xs text-blue-700">
-              已用 {{ safetyUsagePercent }}%（超 7G 自动阻断长辈上传）
+              已用 {{ safetyUsagePercent }}%（超 7G 自动拦截新视频上传）
             </div>
           </div>
 
@@ -701,7 +701,7 @@ onBeforeUnmount(() => {
         <div class="text-5xl mb-3">📭</div>
         <h2 class="text-lg font-bold text-slate-800">当前没有待拷贝的广场舞视频</h2>
         <p class="mt-1 text-sm text-slate-500">
-          老妈上传新视频后会自动出现在这里，也可以点击上方“复制老妈微信上传链接”发给老妈。
+          上传新视频后会自动出现在这里，也可以点击上方“复制快捷上传链接”分享使用。
         </p>
       </section>
 

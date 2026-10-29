@@ -42,7 +42,7 @@ function handleConfirm() {
         </div>
 
         <p class="text-[19px] leading-relaxed text-stone-700 mb-5">
-          首次使用请输入家人告诉您的口令，输入一次后手机会自动记住。
+          首次使用请输入系统访问口令，输入后本机将自动保存。
         </p>
 
         <form @submit.prevent="handleConfirm" class="space-y-4">

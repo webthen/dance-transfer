@@ -55,7 +55,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const usedGb = (currentTotalBytes / (1024 * 1024 * 1024)).toFixed(2);
     return jsonResponse(
       {
-        error: `云端存储空间已满（已用 ${usedGb}GB / 7GB 安全限额），请先提醒儿子在电脑管理端清空已下载的视频哦`,
+        error: `云端存储空间已满（已用 ${usedGb}GB / 7.0GB 安全限额），请先在管理端清理已下载的视频`,
       },
       400
     );
